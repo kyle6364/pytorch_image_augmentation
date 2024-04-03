@@ -20,11 +20,11 @@ class TransformsParams:
 
     :param image: PIL.Image.Image or torch.Tensor
     :param p: probability of the image being transformed. Default is 0.5
-    :param transforms: list of torch.nn.Module
+    :param transforms: list of torch.nn.Module, if None use the DEFAULT_TRANSFORMS
     """
 
     def __init__(self,
-                 image: Union[Image.Image, torch.Tensor],
+                 image: list[Union[Image.Image, torch.Tensor]],
                  p: float = 0.5,
                  transforms: list[torch.nn.Module] = None):
         self.image = image
@@ -32,11 +32,10 @@ class TransformsParams:
         self.transforms = transforms or DEFAULT_TRANSFORMS
 
 
-def compose(transforms_params: TransformsParams = None) -> Union[torch.Tensor, Callable]:
+def compose(transforms_params: TransformsParams) -> Union[torch.Tensor, Callable]:
     """
     return a generator of transforms.Compose
 
-    :param image: PIL.Image.Image or torch.Tensor
     :param transforms_params: if None use the DEFAULT_TRANSFORMS
     :return: Generator of transforms.Compose
     """
@@ -44,14 +43,14 @@ def compose(transforms_params: TransformsParams = None) -> Union[torch.Tensor, C
     if len(transforms) == 0:
         raise ValueError('Empty transforms')
 
-    if isinstance(image, Image.Image) and not isinstance(transforms[0], torch.Tensor):
+    if isinstance(transforms_params.image, Image.Image) and not isinstance(transforms[0], torch.Tensor):
         transforms = [tv_transforms.ToTensor()] + transforms
-        return tv_transforms.Compose(transforms)(image)
+        return tv_transforms.Compose(transforms)(transforms_params.image)
 
-    if not isinstance(image, torch.Tensor):
-        raise ValueError(f'Invalid image type: {type(image)}')
+    if not isinstance(transforms_params.image, torch.Tensor):
+        raise ValueError(f'Invalid image type: {type(transforms_params.image)}')
 
     return tv_transforms.Compose(transforms)
 
 
-print(type(compose(Image.open("6_test/1.jpg"))))
+print(type(compose(TransformsParams(image=[Image.open('6_test/1.jpg')]))))
