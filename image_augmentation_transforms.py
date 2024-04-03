@@ -1,4 +1,4 @@
-from typing import Union, Generator
+from typing import Union, Callable
 
 import cv2
 import numpy
@@ -6,49 +6,52 @@ import torch
 import torchvision.transforms as tv_transforms
 from PIL import Image
 
-DEFAULT_TRANSFORMS: list[list[any]] = [
-    [
-        tv_transforms.RandomRotation(degrees=25, expand=True)
-    ],
-    [
-        tv_transforms.RandomPerspective(distortion_scale=0.4, p=1)
-    ],
-    [
-        tv_transforms.GaussianBlur(kernel_size=(7, 13))
-    ],
-    [
-        tv_transforms.ColorJitter(brightness=0.7, contrast=0.4)
-    ]
+DEFAULT_TRANSFORMS: list[Union[torch.nn.Module, tv_transforms.ToTensor()]] = [
+    tv_transforms.RandomRotation(degrees=25, expand=True),
+    tv_transforms.RandomPerspective(distortion_scale=0.4, p=1),
+    tv_transforms.GaussianBlur(kernel_size=(7, 13)),
+    tv_transforms.ColorJitter(brightness=0.7, contrast=0.4)
 ]
 
 
-def transforms_generator(image: Union[str, Image.Image, numpy.ndarray], transforms: list[torch.nn.Module] = None) \
-        -> Generator[tv_transforms.Compose, None, None]:
+class TransformsParams:
+    """
+    Class to store the parameters of the transforms
+
+    :param image: PIL.Image.Image or torch.Tensor
+    :param p: probability of the image being transformed. Default is 0.5
+    :param transforms: list of torch.nn.Module
+    """
+
+    def __init__(self,
+                 image: Union[Image.Image, torch.Tensor],
+                 p: float = 0.5,
+                 transforms: list[torch.nn.Module] = None):
+        self.image = image
+        self.probability = p
+        self.transforms = transforms or DEFAULT_TRANSFORMS
+
+
+def compose(transforms_params: TransformsParams = None) -> Union[torch.Tensor, Callable]:
     """
     return a generator of transforms.Compose
 
-    :param image: file path or PIL.Image.Image or numpy.ndarray
-    :param transforms: if None or empty will use the default_transforms
+    :param image: PIL.Image.Image or torch.Tensor
+    :param transforms_params: if None use the DEFAULT_TRANSFORMS
     :return: Generator of transforms.Compose
     """
+    transforms = transforms_params.transforms if transforms_params else DEFAULT_TRANSFORMS[:]
+    if len(transforms) == 0:
+        raise ValueError('Empty transforms')
 
-    if isinstance(image, Image.Image):
-        image = numpy.asarray(image)
-    elif isinstance(image, str):
-        if not image.lower().endswith(('.jpg', '.jpeg', '.png')):
-            raise ValueError(f'Invalid image file: {image}')
-        # convert from non-RGB to RGB
-        image = cv2.imread(image)[:, :, ::-1]
-    elif not isinstance(image, numpy.ndarray):
+    if isinstance(image, Image.Image) and not isinstance(transforms[0], torch.Tensor):
+        transforms = [tv_transforms.ToTensor()] + transforms
+        return tv_transforms.Compose(transforms)(image)
+
+    if not isinstance(image, torch.Tensor):
         raise ValueError(f'Invalid image type: {type(image)}')
 
-    transforms_: list[list[any]] = []
-    if transforms is None or len(transforms) == 0:
-        transforms_ = DEFAULT_TRANSFORMS[:]
-    else:
-        for transform in transforms:
-            transforms_.append([transform])
-    for transform in transforms_:
-        if not isinstance(transform[0], tv_transforms.ToPILImage) and not isinstance(image, Image.Image):
-            transform.insert(0, tv_transforms.ToPILImage())
-        yield tv_transforms.Compose(transform)(image)
+    return tv_transforms.Compose(transforms)
+
+
+print(type(compose(Image.open("6_test/1.jpg"))))

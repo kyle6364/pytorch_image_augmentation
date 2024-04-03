@@ -4,6 +4,8 @@ from matplotlib import pyplot as plt
 
 import image_augmentation_transforms as iat
 
+from PIL import Image
+
 
 def _show_image(image, picture_name: str):
     plt.imshow(image)
@@ -19,8 +21,10 @@ def _test_and_show(directory: str):
         for file in files:
             if not file.lower().endswith(('.jpg', '.jpeg', '.png')):
                 continue
-            for i, e in enumerate(iat.transforms_generator(os.path.join(root, file))):
-                _show_image(e, f'{transform_names[i]} Image')
+            transforms = iat.compose(Image.open(os.path.join(root, file)))
+            transforms()
+            # for i, e in enumerate():
+            #     _show_image(e, f'{transform_names[i]} Image')
 
 
 if __name__ == '__main__':
