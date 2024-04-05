@@ -1,42 +1,57 @@
-from typing import Callable
+from typing import Callable, Union
 
 import torch
 import torchvision.transforms as tv_transforms
 from PIL import Image
 
-DEFAULT_TRANSFORMS = [
+"""
+    Default parameters explanation:
+        Some of them are based on the torch.nn.Module library's default values.
+        
+        Other values have been carefully selected based on practical testing, 
+        incorporating factors such as rotate, blur, brightness, contrast,erasing, 
+        and real-world baseball card photography scenarios. 
+        These values reflect a combination of objective measurements and the subjective judgment of developers.
+        
+    For example:
+        why is degrees=20? Greater than 20 maybe too much, less than 20 may not be enough.
+        I don't think people rotate the card more than 20 degrees when taking photos.
+        It's like OpenAI's temperature parameter, why set to 0.3? Why set to 0.7? Why not 0.562?
+        It's a subjective judgment based on the experience of the developers.
+"""
+DEFAULT_TRANSFORMS: list[torch.nn.Module] = [
     tv_transforms.RandomRotation(degrees=20, expand=True),
-    tv_transforms.RandomPerspective(distortion_scale=0.5, p=0.5),
-    tv_transforms.ColorJitter(brightness=1, contrast=0.5),
-    tv_transforms.GaussianBlur(kernel_size=(7, 13))
+    tv_transforms.RandomPerspective(distortion_scale=0.3, p=0.5),
+    tv_transforms.ColorJitter(brightness=0.6, contrast=0.3),
+    tv_transforms.GaussianBlur(kernel_size=(7, 13)),
+    tv_transforms.RandomErasing(p=0.5, scale=(0.01, 0.03), ratio=(0.1, 0.5))
 ]
 
 
-class DataAugmentationParams:
+class DataAugmentationProcessor:
     """
     Class to store the parameters of the transforms
 
     :param transforms: list of torch.nn.Module, if None will use the default transforms,
-                        [RandomRotation, RandomPerspective, ColorJitter, GaussianBlur]
-    :param p: probability(from 0 to 1.0) of the image being transformed.
-                        Default is 0.5, only set to transforms that have a probability.
-                        If transforms is not None, will be ignored.
+                        [RandomRotation, RandomPerspective, ColorJitter, GaussianBlur, RandomErasing]
     :param image: PIL.Image.Image or torch.Tensor
     :param kwargs:
             Attributes of subclasses of torch.nn.Module.
-            Examples:
-                torchvision.transforms.RandomRotation: degrees, expand
-                torchvision.transforms.RandomPerspective: distortion_scale,p
-                torchvision.transforms.ColorJitter: brightness, contrast
-                ...
-            **kwargs = {
+            Examples: **kwargs = {
                             "degrees": 20,
                             "expand": True,
                             "distortion_scale": 0.5,
                             "p": 0.5,
                             "brightness": 1,
-                            "contrast": 0.5
+                            "contrast": 0.5,
+                            "kernel_size": (7, 13),
+                            "scale": (0.02, 0.33),
+                            "ratio": (0.3, 3.3),
                         }
+            torchvision.transforms.RandomRotation: degrees, expand
+            torchvision.transforms.RandomPerspective: distortion_scale,p
+            torchvision.transforms.ColorJitter: brightness, contrast
+                ...
             // degrees (sequence or number): Range of degrees to select from.
                         If degrees is a number instead of sequence like (min, max), the range of degrees
                         will be (-degrees, +degrees).
@@ -50,7 +65,10 @@ class DataAugmentationParams:
             ... etc.
     """
 
-    def __init__(self, transforms: list[torch.nn.Module] = None, image: Image.Image | torch.Tensor = None, **kwargs):
+    def __init__(self,
+                 transforms: list[torch.nn.Module] = None,
+                 image: Union[Image.Image, torch.Tensor] = None,
+                 **kwargs):
         if transforms:
             self.transforms = transforms
         else:
@@ -68,28 +86,26 @@ class DataAugmentationParams:
 
         return default_transforms
 
+    def compose(self, call_compose: bool = False) \
+            -> torch.Tensor | Callable[[Image.Image | torch.Tensor], torch.Tensor]:
+        """
+        Compose the transforms with the image
+        :param call_compose: bool,
+                            if false or transforms_params.image is None return the compose function,
+                            otherwise return the transformed torch.Tensor
+        :return: Callable
 
-def compose(dap: DataAugmentationParams, call_compose: bool = False) \
-        -> torch.Tensor | Callable[[Image.Image | torch.Tensor], torch.Tensor]:
-    """
-    Compose the transforms with the image
-    :param dap: DataAugmentationParams
-    :param call_compose: bool,
-                        if false or transforms_params.image is None return the compose function,
-                        otherwise return the transformed torch.Tensor
-    :return: Callable
+        """
+        transforms = self.transforms
+        if transforms is None or len(transforms) == 0:
+            return tv_transforms.Compose([])
+        image = self.image
+        if image is None:
+            return tv_transforms.Compose(transforms)
 
-    """
-    transforms = dap.transforms
-    if transforms is None or len(transforms) == 0:
-        return tv_transforms.Compose([])
-    image = dap.image
-    if image is None:
+        if isinstance(image, Image.Image) and transforms[0] != tv_transforms.ToTensor():
+            transforms = [tv_transforms.ToTensor()] + transforms
+
+        if call_compose:
+            return tv_transforms.Compose(transforms)(image)
         return tv_transforms.Compose(transforms)
-
-    if isinstance(image, Image.Image) and transforms[0] != tv_transforms.ToTensor():
-        transforms = [tv_transforms.ToTensor()] + transforms
-
-    if call_compose:
-        return tv_transforms.Compose(transforms)(image)
-    return tv_transforms.Compose(transforms)

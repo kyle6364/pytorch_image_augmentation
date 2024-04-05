@@ -19,8 +19,10 @@ def _test_and_show(directory: str):
         for file in files:
             if not file.lower().endswith(('.jpg', '.jpeg', '.png')):
                 continue
-            dap = iat.DataAugmentationParams(image=Image.open(os.path.join(root, file)))
-            image: torch.Tensor = iat.compose(dap, call_compose=True)
+            source_image = Image.open(os.path.join(root, file))
+            dap = iat.DataAugmentationProcessor(image=source_image, **{"p": 1})
+            # dap.transforms.clear()
+            image: torch.Tensor = dap.compose(call_compose=True)
             _show_image(tv_convert.to_pil_image(image), file)
 
 
