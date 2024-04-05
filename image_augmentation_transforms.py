@@ -1,3 +1,4 @@
+import random
 from typing import Callable, Union
 
 import torch
@@ -15,8 +16,6 @@ from PIL import Image
         
     For example:
         why is degrees=20? Greater than 20 maybe too much, less than 20 may not be enough.
-        I don't think people rotate the card more than 20 degrees when taking photos.
-        It's like OpenAI's temperature parameter, why set to 0.3? Why set to 0.7? Why not 0.562?
         It's a subjective judgment based on the experience of the developers.
 """
 DEFAULT_TRANSFORMS: list[torch.nn.Module] = [
@@ -34,7 +33,7 @@ class DataAugmentationProcessor:
 
     :param transforms: list of torch.nn.Module, if None will use the default transforms,
                         [RandomRotation, RandomPerspective, ColorJitter, GaussianBlur, RandomErasing]
-    :param image: PIL.Image.Image or torch.Tensor
+    :param image: PIL.Image.Image or torch.Tensor or list[PIL.Image.Image] or list[torch.Tensor]
     :param kwargs:
             Attributes of subclasses of torch.nn.Module.
             Examples: **kwargs = {
@@ -67,7 +66,7 @@ class DataAugmentationProcessor:
 
     def __init__(self,
                  transforms: list[torch.nn.Module] = None,
-                 image: Union[Image.Image, torch.Tensor] = None,
+                 image: Union[Image.Image, torch.Tensor, list[Image.Image], list[torch.Tensor]] = None,
                  **kwargs):
         if transforms:
             self.transforms = transforms
@@ -86,13 +85,16 @@ class DataAugmentationProcessor:
 
         return default_transforms
 
-    def compose(self, call_compose: bool = False) \
-            -> torch.Tensor | Callable[[Image.Image | torch.Tensor], torch.Tensor]:
+    def compose(self) \
+            -> Union[
+                Callable[[Union[Image.Image, torch.Tensor]], torch.Tensor],
+                list[Callable[[Union[Image.Image, torch.Tensor]], torch.Tensor]]]:
         """
         Compose the transforms with the image
-        :param call_compose: bool,
-                            if false or transforms_params.image is None return the compose function,
-                            otherwise return the transformed torch.Tensor
+
+        if self.`image` is list then return list of Compose function
+        else return Compose function
+
         :return: Callable
 
         """
@@ -103,9 +105,34 @@ class DataAugmentationProcessor:
         if image is None:
             return tv_transforms.Compose(transforms)
 
-        if isinstance(image, Image.Image) and transforms[0] != tv_transforms.ToTensor():
-            transforms = [tv_transforms.ToTensor()] + transforms
+        original_transforms = transforms[:]
+        transforms = self.__add_tensor_to_pipeline(image, transforms)
 
-        if call_compose:
-            return tv_transforms.Compose(transforms)(image)
-        return tv_transforms.Compose(transforms)
+        if not isinstance(image, list):
+            return tv_transforms.Compose(transforms)
+
+        image_size = len(image)
+        if image_size == 0:
+            return tv_transforms.Compose(transforms)
+
+        transforms_size = len(original_transforms)
+        quotient = transforms_size // image_size
+        remainder = transforms_size % image_size
+
+        compose = []
+        if quotient > 0:
+            for e in original_transforms:
+                compose += [tv_transforms.Compose(e) for _ in range(quotient)]
+        if remainder > 0:
+            compose += [tv_transforms.Compose(t) for t in random.sample(original_transforms, remainder)]
+        random.shuffle(compose)
+
+        return compose
+
+    @staticmethod
+    def __add_tensor_to_pipeline(image, transforms):
+        if isinstance(image, Image.Image) and transforms[0] != tv_transforms.ToTensor():
+            return [tv_transforms.ToTensor()] + transforms
+        if isinstance(image, list) and len(image) > 0:
+            return DataAugmentationProcessor.__add_tensor_to_pipeline(image[0], transforms)
+        return transforms

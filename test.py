@@ -22,7 +22,7 @@ def _test_and_show(directory: str):
             source_image = Image.open(os.path.join(root, file))
             dap = iat.DataAugmentationProcessor(image=source_image, **{"p": 1})
             # dap.transforms.clear()
-            image: torch.Tensor = dap.compose(call_compose=True)
+            image = dap.compose()(source_image)
             _show_image(tv_convert.to_pil_image(image), file)
 
 
