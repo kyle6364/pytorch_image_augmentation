@@ -85,15 +85,16 @@ class DataAugmentationProcessor:
 
         return default_transforms
 
-    def compose(self) \
+    def compose(self, call_compose: bool = False) \
             -> Union[
+                Union[torch.Tensor, list[torch.Tensor]],
                 Callable[[Union[Image.Image, torch.Tensor]], torch.Tensor],
                 list[Callable[[Union[Image.Image, torch.Tensor]], torch.Tensor]]]:
         """
         Compose the transforms with the image
 
-        if self.`image` is list then return list of Compose function
-        else return Compose function
+        if call_compose is true then call the compose and return torch.Tensor or list(torch.Tensor)
+        otherwise return the function or list of functions
 
         :return: Callable
 
@@ -109,7 +110,7 @@ class DataAugmentationProcessor:
         transforms = self.__add_tensor_to_pipeline(image, transforms)
 
         if not isinstance(image, list):
-            return tv_transforms.Compose(transforms)
+            return tv_transforms.Compose(transforms)(image) if call_compose else tv_transforms.Compose(transforms)
 
         image_size = len(image)
         if image_size == 0:
@@ -133,7 +134,7 @@ class DataAugmentationProcessor:
             compose += [tv_transforms.Compose(t) for t in random.sample(original_transforms, remainder)]
         random.shuffle(compose)
 
-        return compose
+        return [c(i) for c, i in zip(compose, image)] if call_compose else compose
 
     @staticmethod
     def __add_tensor_to_pipeline(image, transforms):
