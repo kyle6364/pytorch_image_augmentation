@@ -119,6 +119,12 @@ class DataAugmentationProcessor:
         quotient = transforms_size // image_size
         remainder = transforms_size % image_size
 
+        """
+        We can aim to evenly distribute the given number of images among the specified transformations. 
+        For example, if you have 100 images and 4 transformations (a, b, c, d), 
+        we can allocate 25 images for each transformation: 25 for a, 25 for b, 25 for c, and 25 for d. 
+        This distribution ensures an equal representation of each transformation type across the dataset.
+        """
         compose = []
         if quotient > 0:
             for e in original_transforms:
