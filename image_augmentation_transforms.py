@@ -1,9 +1,9 @@
 import random
-from typing import Callable, Union
+from typing import Callable
 
+import numpy as np
 import torch
 import torchvision.transforms as tv_transforms
-from PIL import Image
 
 """
     Default parameters explanation:
@@ -33,7 +33,6 @@ class DataAugmentationProcessor:
 
     :param transforms: list of torch.nn.Module, if None will use the default transforms,
                         [RandomRotation, RandomPerspective, ColorJitter, GaussianBlur, RandomErasing]
-    :param image: PIL.Image.Image or torch.Tensor or list[PIL.Image.Image] or list[torch.Tensor]
     :param kwargs:
             Attributes of subclasses of torch.nn.Module.
             Examples: **kwargs = {
@@ -64,15 +63,11 @@ class DataAugmentationProcessor:
             ... etc.
     """
 
-    def __init__(self,
-                 transforms: list[torch.nn.Module] = None,
-                 image: Union[Image.Image, torch.Tensor, list[Image.Image], list[torch.Tensor]] = None,
-                 **kwargs):
+    def __init__(self, transforms: list[torch.nn.Module] = None, **kwargs):
         if transforms:
             self.transforms = transforms
         else:
             self.transforms = self.default_transforms(**kwargs)
-        self.image = image
 
     @staticmethod
     def default_transforms(**kwargs):
@@ -85,61 +80,17 @@ class DataAugmentationProcessor:
 
         return default_transforms
 
-    def compose(self, call_compose: bool = False) \
-            -> Union[
-                Union[torch.Tensor, list[torch.Tensor]],
-                Callable[[Union[Image.Image, torch.Tensor]], torch.Tensor],
-                list[Callable[[Union[Image.Image, torch.Tensor]], torch.Tensor]]]:
+    def compose(self, p: float = 0.5) -> Callable[[torch.Tensor], torch.Tensor]:
         """
         Compose the transforms with the image
 
-        if call_compose is true then call the compose and return torch.Tensor or list(torch.Tensor)
-        otherwise return the function or list of functions
-
+        :param p: float, probability of binomial distribution, default is 0.5
         :return: Callable
 
         """
         transforms = self.transforms
         if transforms is None or len(transforms) == 0:
             return tv_transforms.Compose([])
-        image = self.image
-        if image is None:
-            return tv_transforms.Compose(transforms)
 
-        original_transforms = transforms[:]
-        transforms = self.__add_tensor_to_pipeline(image, transforms)
-
-        if not isinstance(image, list):
-            return tv_transforms.Compose(transforms)(image) if call_compose else tv_transforms.Compose(transforms)
-
-        image_size = len(image)
-        if image_size == 0:
-            return tv_transforms.Compose(transforms)
-
-        transforms_size = len(original_transforms)
-        quotient = transforms_size // image_size
-        remainder = transforms_size % image_size
-
-        """
-        We can aim to evenly distribute the given number of images among the specified transformations. 
-        For example, if you have 100 images and 4 transformations (a, b, c, d), 
-        we can allocate 25 images for each transformation: 25 for a, 25 for b, 25 for c, and 25 for d. 
-        This distribution ensures an equal representation of each transformation type across the dataset.
-        """
-        compose = []
-        if quotient > 0:
-            for e in original_transforms:
-                compose += [tv_transforms.Compose(e) for _ in range(quotient)]
-        if remainder > 0:
-            compose += [tv_transforms.Compose(t) for t in random.sample(original_transforms, remainder)]
-        random.shuffle(compose)
-
-        return [c(i) for c, i in zip(compose, image)] if call_compose else compose
-
-    @staticmethod
-    def __add_tensor_to_pipeline(image, transforms):
-        if isinstance(image, Image.Image) and transforms[0] != tv_transforms.ToTensor():
-            return [tv_transforms.ToTensor()] + transforms
-        if isinstance(image, list) and len(image) > 0:
-            return DataAugmentationProcessor.__add_tensor_to_pipeline(image[0], transforms)
-        return transforms
+        transforms = random.sample(transforms, np.random.binomial(len(transforms), p))
+        return tv_transforms.Compose(transforms)
