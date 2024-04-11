@@ -15,11 +15,11 @@ import torchvision.transforms as tv_transforms
         These values reflect a combination of objective measurements and the subjective judgment of developers.
         
     For example:
-        why is degrees=20? Greater than 20 maybe too much, less than 20 may not be enough.
+        why is degrees=15? Greater than 15 maybe too much, less than 15 may not be enough.
         It's a subjective judgment based on the experience of the developers.
 """
 DEFAULT_TRANSFORMS: list[torch.nn.Module] = [
-    tv_transforms.RandomRotation(degrees=20, expand=True),
+    tv_transforms.RandomRotation(degrees=15, expand=True),
     tv_transforms.RandomPerspective(distortion_scale=0.3, p=0.5),
     tv_transforms.ColorJitter(brightness=0.6, contrast=0.3),
     tv_transforms.GaussianBlur(kernel_size=(7, 13)),
@@ -36,12 +36,12 @@ class DataAugmentationProcessor:
     :param kwargs:
             Attributes of subclasses of torch.nn.Module.
             Examples: **kwargs = {
-                            "degrees": 20,
+                            "degrees": 15,
                             "expand": True,
-                            "distortion_scale": 0.5,
+                            "distortion_scale": 0.3,
                             "p": 0.5,
-                            "brightness": 1,
-                            "contrast": 0.5,
+                            "brightness": 0.6,
+                            "contrast": 0.3,
                             "kernel_size": (7, 13),
                             "scale": (0.02, 0.33),
                             "ratio": (0.3, 3.3),
@@ -94,3 +94,14 @@ class DataAugmentationProcessor:
 
         transforms = random.sample(transforms, np.random.binomial(len(transforms), p))
         return tv_transforms.Compose(transforms)
+
+    def __call__(self, image: torch.Tensor) -> torch.Tensor:
+        """
+        Apply the transforms to the image
+
+        :param image: torch.Tensor, image tensor
+        :return: torch.Tensor, transformed image tensor
+        """
+        return self.compose()(image)
+
+

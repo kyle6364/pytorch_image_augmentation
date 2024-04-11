@@ -23,7 +23,10 @@ def _test_and_show(directory: str):
             source_image = Image.open(os.path.join(root, file))
             dap = iat.DataAugmentationProcessor(image=source_image, **{"p": 1})
             # dap.transforms.clear()
-            image = dap.compose()(transforms.ToTensor()(source_image))
+            to_tensor = transforms.ToTensor()
+            tensor_image = to_tensor(source_image)
+            compose = dap.compose()
+            image = compose(tensor_image)
             _show_image(tv_convert.to_pil_image(image), file)
 
 
